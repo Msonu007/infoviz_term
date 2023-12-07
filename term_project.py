@@ -6,6 +6,10 @@ import numpy as np
 import sklearn
 from sklearn.preprocessing import StandardScaler
 import statsmodels.api as sm
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import multivariate_normal
 
 
 class Phase1():
@@ -212,10 +216,33 @@ class Phase1():
         plt.show()
 
     def threeD_contour(self):
-        pass
+        df_temp = self.dataset[["order_dow", "order_hour_of_day", "days_since_prior_order"]]
+        # Create grid and multivariate normal
+        x = np.linspace(min(df_temp["order_dow"]), max(df_temp["order_dow"]), 500)
+        y = np.linspace(min(df_temp["order_hour_of_day"]), max(df_temp["order_hour_of_day"]), 500)
+        X, Y = np.meshgrid(x,y)
+        pos = np.empty(X.shape + (2,))
+        pos[:, :, 0] = X; pos[:, :, 1] = Y
+        rv = multivariate_normal([df_temp["order_dow"].mean(), df_temp["order_hour_of_day"].mean()], [[1, 0], [0, 1]])
+
+        # Make a 3D plot
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        ax.plot_surface(X, Y, rv.pdf(pos),cmap='viridis',linewidth=0)
+        ax.set_xlabel('order_dow')
+        ax.set_ylabel('order_hour_of_day')
+        ax.set_zlabel('PDF')
+        ax.set_title('3D contour plot')
+        plt.show()
 
     def plot_cluster_map(self):
-        pass
+        df_temp = self.dataset[["order_dow", "order_hour_of_day", "days_since_prior_order"]]
+
+        # Create a cluster map
+        cluster_map = sns.clustermap(df_temp.corr(), annot=True, cmap='viridis')
+
+        # Show the plot
+        plt.show()
 
     def plot_hexbin(self):
         df_temp = self.dataset[["order_dow", "days_since_prior_order"]]
