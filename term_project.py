@@ -16,8 +16,8 @@ class Phase1():
     def __init__(self, dataset, dataset_full):
         self.dataset = pd.read_csv(dataset)
         print("downsample dataset loaded successfully")
-        self.dataset_full = pd.read_csv(dataset_full)
-        print("full sized dataset loaded sucessfully")
+        #self.dataset_full = pd.read_csv(dataset_full)
+        #print("full sized dataset loaded sucessfully")
         self.label_prop = {"font": "serif", "color": "darkred", "size": 15}
         self.title_prop = {"font": "serif", "color": "blue", "size": 20}
 
@@ -186,7 +186,27 @@ class Phase1():
         pass
 
     def plot_area(self):
-        pass
+        df = self.dataset["order_dow"].value_counts().reset_index()
+        df.columns = ["order_dow", "count"]
+        df = df.sort_values(by="order_dow")
+        print(df.head())
+
+        # Create a line plot
+        sns.lineplot(data=df, x='order_dow', y='count',label="count")
+
+        # Get the current Axes instance
+        ax = plt.gca()
+        for i in range(len(df)):
+            ax.plot([df["order_dow"]]*1000,np.linspace(0,df["count"],1000),color="red",alpha=0.4,linestyle="--")
+        # Fill the area under the line
+        ax.fill_between(df['order_dow'], df['count'], color='skyblue', alpha=0.4,label="area")
+        ax.set_xlabel("order_dow", fontdict=self.label_prop)
+        ax.set_ylabel("count", fontdict=self.label_prop)
+        ax.set_title("Area plot", fontdict=self.title_prop)
+        ax.legend()
+
+        # Show the plot
+        plt.show()
 
     def plot_violin(self):
         fig,ax = plt.subplots(1,1,figsize=(10,10))
@@ -215,7 +235,7 @@ class Phase1():
         sns.histplot(data=new_df, x="user_id", kde=True, fill=False)
         plt.show()
 
-    def threeD_contour(self):
+    def threeD(self):
         df_temp = self.dataset[["order_dow", "order_hour_of_day", "days_since_prior_order"]]
         # Create grid and multivariate normal
         x = np.linspace(min(df_temp["order_dow"]), max(df_temp["order_dow"]), 500)
@@ -235,6 +255,13 @@ class Phase1():
         ax.set_title('3D contour plot')
         plt.show()
 
+    def plot_contour(self):
+        plt.figure(figsize=(10, 10))
+        sns.kdeplot(data=self.dataset, x="order_dow", y="order_hour_of_day", fill=True, alpha=0.6,cmap="viridis")
+        plt.xlabel("order_dow", fontdict=self.label_prop)
+        plt.ylabel("order_hour_of_day", fontdict=self.label_prop)
+        plt.title("Contour plot", fontdict=self.title_prop)
+        plt.show()
     def plot_cluster_map(self):
         df_temp = self.dataset[["order_dow", "order_hour_of_day", "days_since_prior_order"]]
 
@@ -264,5 +291,5 @@ class Phase1():
         pass
 
 
-c = Phase1("data/downsample.csv", "data/train_final.csv")
-c.plot_bar()
+c = Phase1("downsample.csv", "data/train_final.csv")
+c.plot_contour()

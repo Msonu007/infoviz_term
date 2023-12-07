@@ -25,7 +25,7 @@ label_font_family="serif"
 
 
 external_Style_sheets = ["https://codepen.io/chriddvp/pen/bWLwgP.css"]
-df = pd.read_csv("data/downsample.csv")
+df = pd.read_csv("downsample.csv")
 app = dash.Dash("My app", external_stylesheets=external_Style_sheets)
 server = app.server
 app.layout = html.Div(
@@ -58,6 +58,7 @@ univariate_layout = html.Div([
             {"label":"KDE plot","value":"KDE plot"},
             {"label":"Violin plot","value":"Violin plot"},
             {"label":"Box plot","value":"Box plot"},
+            {"label":"Area plot","value":"Area plot"}
         ],
         value="lineplot"
     ),
@@ -1295,12 +1296,17 @@ def update_graph_3d(x, y, z,observations):
 
     # tight layout
     fig.update_layout(
-        title = f"Regression Line Plot for {x} and {y}",
+        title = f"3D plot for {x} and {y} and {z}",
         title_font_family=title_font_family,
         title_font_color=title_font_color,
         title_font_size=title_font_size,
         title_x=0.5,
         title_y=0.95,
+        scene = dict(
+        xaxis_title=f'{x}',
+        yaxis_title=f'{y}',
+        zaxis_title=f{z}
+        ),
         font_family = label_font_family,
         font_color = label_font_color,
         font_size = label_font_size,
@@ -1512,6 +1518,78 @@ def plot_heatmap(x, observations):
         )
     return fig
 
+q17_layout = html.Div([
+    html.Center(html.H2("Area plot")),
+    html.Br(),
+    html.P(html.H5("Select x")),
+    dcc.Dropdown(id="x",
+                 options=[
+                     {"label": "order_dow", "value": "order_dow"},
+                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                     {"label": "days_since_prior_order", "value": "days_since_prior_order"},
+                 ],
+                 multi=True,
+                 value=["order_dow","order_hour_of_day","days_since_prior_order"],
+                 ),
+    html.Br(),
+    html.Br(),
+    html.B(html.H2("Enter number of observations")),
+    dcc.Input(id="observations", type="number", placeholder=f"{len(df)}"),
+    html.Br(),
+    html.Br(),
+    dcc.Loading(
+        id="loading",
+        type="circle",
+        children=html.Div(dcc.Graph(id="areaplot"))
+    )
+])
+
+
+@app.callback(
+    Output(component_id="areaplot", component_property="figure"),
+    [
+        Input(component_id="x", component_property="value"),
+        Input(component_id="observations", component_property="value")
+    ]
+)
+def plot_area(x, observations):
+    if observations is None:
+        temp_df = df.sample(50000)
+    else:
+        temp_df = df.iloc[:int(observations)]
+    
+    fig = go.Figure()
+
+    for var in x:
+        temp_1 = df[var].value_counts().reset_index()
+        temp_1.columns = [var, 'count']
+        temp_1 = temp_1.sort_values(var)
+        fig.add_trace(go.Scatter(
+            x=temp_1[var], 
+            y=temp_1['count'],
+            fill='tozeroy',
+            mode='lines', 
+            name=var,
+        ))
+
+    fig.update_layout(
+        title="Area Plot",
+        xaxis_title="columns",
+        yaxis_title="Value",
+        autosize=False,
+        width=1500,
+        title_font_family=title_font_family,
+        title_font_color=title_font_color,
+        title_font_size=title_font_size,
+        title_x=0.5,
+        title_y=0.95,
+        font_family = label_font_family,
+        font_color = label_font_color,
+        font_size = label_font_size,
+        )
+
+    return fig
+
 @app.callback(
     Output(component_id="question_ans", component_property="children"),
     [Input(component_id="select-PAGE", component_property="value")],
@@ -1550,6 +1628,8 @@ def update_layout(value):
         return q10_layout
     elif value == "Box plot":
         return q15_layout
+    elif value == "Area plot":
+        return q17_layout
     else:
         return
     
