@@ -31,6 +31,14 @@ server = app.server
 app.layout = html.Div(
     [
         html.Center(html.H1("Term Project")),
+        html.Center(html.H3("Instacart Data Analysis")),
+        html.Div([
+        html.Div(style={'width': '30%', 'display': 'inline-block', 'verticalalign':'middle'}),
+
+        html.Img(src="https://miro.medium.com/v2/resize:fit:4800/format:webp/1*_SRbz8535-CxPzo6IL9pBA.png",style={'width': '30%', 'display': 'inline-block',
+        'vertical-align':'middle'}),
+        html.Div(style={'width': '30%', 'display': 'inline-block', 'verticalalign':'middle'}),
+        ]),
         dcc.Tabs(
             id="select-PAGE",
             children=[
@@ -87,45 +95,45 @@ q1_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=False,
-                 value="order_dow"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=False,
+                value="order_dow"
+                ),
     html.Br(),
     html.P(html.H5("Select y")),
     dcc.Dropdown(id="y",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=False,
-                 value="order_dow"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=False,
+                value="order_dow"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select Marker Style")),
     dcc.RadioItems(id="marker",
-                   options=[
-                       {"label": "dot marker", "value": "."},
-                       {"label": "circle marker", "value": "o"},
-                       {"label": "star marker", "value": "*"}
-                   ],
-                   value="."
-                   ),
+                options=[
+                    {"label": "dot marker", "value": "."},
+                    {"label": "circle marker", "value": "o"},
+                    {"label": "star marker", "value": "*"}
+                ],
+                value="."
+                ),
     html.Br(),
     html.Br(),
     dcc.RadioItems(id="type",
-                   options=[
-                       {"label": "unique", "value": "unqiue"},
-                       {"label": "aggregate", "value": "aggregate"},
-                   ],
-                   value="aggregate"
-                   ),
+                options=[
+                    {"label": "unique", "value": "unqiue"},
+                    {"label": "aggregate", "value": "aggregate"},
+                ],
+                value="aggregate"
+                ),
     html.Br(),
     html.Br(),
     dcc.RangeSlider(id="observations",
@@ -147,11 +155,11 @@ q1_layout = html.Div([
 @app.callback(
     Output(component_id="lineplot", component_property="figure"),
     [Input(component_id="x", component_property="value"),
-     Input(component_id="y", component_property="value"),
-     Input(component_id="marker", component_property="value"),
-     Input(component_id="type", component_property="value"),
-     Input(component_id="observations", component_property="value")
-     ]
+    Input(component_id="y", component_property="value"),
+    Input(component_id="marker", component_property="value"),
+    Input(component_id="type", component_property="value"),
+    Input(component_id="observations", component_property="value")
+    ]
 )
 def plot_line_dy(x, y, marker, agg, observations):
     if x is None or y is None:
@@ -165,16 +173,16 @@ def plot_line_dy(x, y, marker, agg, observations):
     new_df = pd.DataFrame.from_dict({x: sorted(l1[:min(len(l1), len(l2))]), y: sorted(l2[:min(len(l2), len(l1))])})
     if agg == "aggregate":
         fig = px.line(data_frame=new_df,
-                      x=x,
-                      y=y,
-                      markers=marker,
-                      title=f"Line plot for {x} and {y}")
+                    x=x,
+                    y=y,
+                    markers=marker,
+                    title=f"Line plot for {x} and {y}")
     else:
         fig = px.line(data_frame=df.iloc[:observations],
-                      x=x,
-                      y=y,
-                      markers=marker,
-                      title=f"Line plot for {x} and {y}")
+                    x=x,
+                    y=y,
+                    markers=marker,
+                    title=f"Line plot for {x} and {y}")
     fig.update_layout(
         title=f"Line plot for {x} and {y}",
         title_font_family=title_font_family,
@@ -195,32 +203,32 @@ q2_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=False,
-                 value="order_dow"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=False,
+                value="order_dow"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select hue")),
     dcc.RadioItems(id="color",
-                   options=[
-                       {"label": "yes", "value": "yes"},
-                       {"label": "no", "value": "no"},
-                   ],
-                   value="no"
-                   ),
+                options=[
+                    {"label": "yes", "value": "yes"},
+                    {"label": "no", "value": "no"},
+                ],
+                value="no"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select Binwidth")),
     dcc.Slider(id="binwidth",
-               min=0,
-               max=50,
-               step=5
-               ),
+            min=0,
+            max=50,
+            step=5
+            ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select Observations for plotting")),
@@ -261,14 +269,14 @@ def plot_histplot(x, color, binwidth, observations):
     if binwidth is not None and int(binwidth) != 0:
         nbins = math.ceil((temp_df[x].max() - temp_df[x].min()) / int(binwidth))
         fig = px.histogram(data_frame=temp_df,
-                           x=x, nbins=nbins,
-                           color=col,
-                           opacity=0.7,
-                           color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'},
-                           histnorm='probability density')
+                        x=x, nbins=nbins,
+                        color=col,
+                        opacity=0.7,
+                        color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'},
+                        histnorm='probability density')
     else:
         fig = px.histogram(data_frame=temp_df, x=x, color=col, opacity=0.7,
-                           color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'}, histnorm='probability density')
+                        color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'}, histnorm='probability density')
     fig.update_layout(
         title=f"Hist plot for {x}",
         title_font_family=title_font_family,
@@ -289,43 +297,43 @@ q3_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "product_name", "value": "product_name"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=False,
-                 value="product_name"
-                 ),
+                options=[
+                    {"label": "product_name", "value": "product_name"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=False,
+                value="product_name"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select y")),
     dcc.Dropdown(id="y",
-                 options=[
-                     {"label": "reordered", "value": "reordered"},
-                 ],
-                 multi=False,
-                 value="reordered"
-                 ),
+                options=[
+                    {"label": "reordered", "value": "reordered"},
+                ],
+                multi=False,
+                value="reordered"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select type")),
     dcc.RadioItems(id="plottype",
-                   options=[
-                       {"label": "stack", "value": "stack"},
-                       {"label": "group", "value": "group"},
-                       {"label": "relative", "value": "relative"},
-                   ],
-                   value="relative"
-                   ),
+                options=[
+                    {"label": "stack", "value": "stack"},
+                    {"label": "group", "value": "group"},
+                    {"label": "relative", "value": "relative"},
+                ],
+                value="relative"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select opacity")),
     dcc.Slider(id="barspace",
-               min=0.1,
-               max=1,
-               step=0.1
-               ),
+            min=0.1,
+            max=1,
+            step=0.1
+            ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select Observations for plotting")),
@@ -400,28 +408,28 @@ q4_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                     {"label": "aisle", "value": "aisle"},
-                     {"label": "department", "value": "department"},
-                     {"label": "reordered", "value": "reordered"},
-                     {"label": "product_name", "value": "product_name"},
-                 ],
-                 multi=False,
-                 value="product_name"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"},
+                    {"label": "aisle", "value": "aisle"},
+                    {"label": "department", "value": "department"},
+                    {"label": "reordered", "value": "reordered"},
+                    {"label": "product_name", "value": "product_name"},
+                ],
+                multi=False,
+                value="product_name"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select hue")),
     dcc.RadioItems(id="color",
-                   options=[
-                       {"label": "yes", "value": "yes"},
-                       {"label": "no", "value": "no"},
-                   ],
-                   value="no"
-                   ),
+                options=[
+                    {"label": "yes", "value": "yes"},
+                    {"label": "no", "value": "no"},
+                ],
+                value="no"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select Observations for plotting")),
@@ -468,7 +476,7 @@ def plot_countplot(x, color, observations):
     filtered_data = temp_df[temp_df[x].isin(top_categories)]
 
     fig = px.histogram(data_frame=filtered_data, x=x, color=col, opacity=0.7,nbins=20,
-                       color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'})
+                    color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'})
     fig.update_layout(
         title=f"Count plot for {x}",
         title_font_family=title_font_family,
@@ -488,33 +496,33 @@ q5_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "aisle", "value": "aisle"},
-                     {"label": "department", "value": "department"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=False,
-                 value="aisle"
-                 ),
+                options=[
+                    {"label": "aisle", "value": "aisle"},
+                    {"label": "department", "value": "department"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=False,
+                value="aisle"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select hue")),
     dcc.RadioItems(id="color",
-                   options=[
-                       {"label": "yes", "value": "yes"},
-                       {"label": "no", "value": "no"},
-                   ],
-                   value="yes"
-                   ),
+                options=[
+                    {"label": "yes", "value": "yes"},
+                    {"label": "no", "value": "no"},
+                ],
+                value="yes"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select n_components")),
     dcc.Slider(id="components",
-               min=10,
-               max=50,
-               step=5,
-               value=10
-               ),
+            min=10,
+            max=50,
+            step=5,
+            value=10
+            ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select Observations for plotting")),
@@ -634,35 +642,35 @@ q6_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                     {"label":"order_id","value":"order_id"},
-                     {"label":"aisle","value":"aisle"},
-                     {"label":"product_name","value":"product_name"}
-                 ],
-                 multi=False,
-                 value="order_dow"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"},
+                    {"label":"order_id","value":"order_id"},
+                    {"label":"aisle","value":"aisle"},
+                    {"label":"product_name","value":"product_name"}
+                ],
+                multi=False,
+                value="order_dow"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select hue")),
     dcc.RadioItems(id="color",
-                   options=[
-                       {"label": "yes", "value": "yes"},
-                       {"label": "no", "value": "no"},
-                   ],
-                   value="no"
-                   ),
+                options=[
+                    {"label": "yes", "value": "yes"},
+                    {"label": "no", "value": "no"},
+                ],
+                value="no"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select Binsize")),
     dcc.Slider(id="binwidth",
-               min=0.1,
-               max=1,
-               step=0.1
-               ),
+            min=0.1,
+            max=1,
+            step=0.1
+            ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select Observations for plotting")),
@@ -704,14 +712,14 @@ def plot_distplot(x, color, binwidth, observations):
     if binwidth is not None and int(binwidth) != 0:
         nbins = math.ceil((temp_df[x].max() - temp_df[x].min()) / int(binwidth))
         fig = px.histogram(data_frame=temp_df,
-                           x=x, nbins=nbins,
-                           color=col,
-                           opacity=0.7,
-                           color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'},
-                           histnorm='probability density')
+                        x=x, nbins=nbins,
+                        color=col,
+                        opacity=0.7,
+                        color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'},
+                        histnorm='probability density')
     else:
         fig = px.histogram(data_frame=temp_df, x=x, color=col, opacity=0.7,
-                           color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'}, histnorm='probability density')
+                        color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'}, histnorm='probability density')
     density = stats.gaussian_kde(temp_df[x])
     xs = np.linspace(temp_df[x].min(),temp_df[x].max(),len(temp_df))
     ys = density(xs)
@@ -735,23 +743,23 @@ q7_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Checklist(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 value=["order_dow","order_hour_of_day"]
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                value=["order_dow","order_hour_of_day"]
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select hue")),
     dcc.RadioItems(id="color",
-                   options=[
-                       {"label": "yes", "value": "yes"},
-                       {"label": "no", "value": "no"},
-                   ],
-                   value="no"
-                   ),
+                options=[
+                    {"label": "yes", "value": "yes"},
+                    {"label": "no", "value": "no"},
+                ],
+                value="no"
+                ),
     
     html.P(html.H5("Select Observations for plotting")),
     dcc.RangeSlider(id="observations",
@@ -822,14 +830,14 @@ q8_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                 ],
-                 multi=False,
-                 value="order_dow"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"},
+                ],
+                multi=False,
+                value="order_dow"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select Observations for plotting")),
@@ -897,14 +905,14 @@ q9_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                 ],
-                 multi=False,
-                 value="order_dow"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"},
+                ],
+                multi=False,
+                value="order_dow"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select Observations for plotting")),
@@ -969,22 +977,22 @@ q10_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=True,
-                 value="order_dow"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=True,
+                value="order_dow"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select opacity")),
     dcc.Slider(id="opacity",
-               min=0.1,
-               max=1,
-               step=0.1,
-               ),
+            min=0.1,
+            max=1,
+            step=0.1,
+            ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select Observations for plotting")),
@@ -1047,25 +1055,25 @@ q11_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=False,
-                 value="days_since_prior_order"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=False,
+                value="days_since_prior_order"
+                ),
     html.Br(),
     html.P(html.H5("Select y")),
     dcc.Dropdown(id="y",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=False,
-                 value="days_since_prior_order"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=False,
+                value="days_since_prior_order"
+                ),
     html.Br(),
     html.Br(),
     dcc.RangeSlider(id="observations",
@@ -1088,9 +1096,9 @@ q11_layout = html.Div([
 @app.callback(
     Output(component_id="regrplot", component_property="figure"),
     [Input(component_id="x", component_property="value"),
-     Input(component_id="y", component_property="value"),
-     Input(component_id="observations", component_property="value")
-     ]
+    Input(component_id="y", component_property="value"),
+    Input(component_id="observations", component_property="value")
+    ]
 )
 def plot_regr_line(x, y,observations):
     if x is None and y is None:
@@ -1119,25 +1127,25 @@ q12_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=False,
-                 value="days_since_prior_order"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=False,
+                value="days_since_prior_order"
+                ),
     html.Br(),
     html.P(html.H5("Select y")),
     dcc.Dropdown(id="y",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=False,
-                 value="days_since_prior_order"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=False,
+                value="days_since_prior_order"
+                ),
     html.Br(),
     html.Br(),
     dcc.RadioItems(id="type_",
@@ -1164,10 +1172,10 @@ q12_layout = html.Div([
 @app.callback(
     Output(component_id="jointplot", component_property="figure"),
     [Input(component_id="x", component_property="value"),
-     Input(component_id="y", component_property="value"),
-     Input(component_id="observations", component_property="value"),
-     Input(component_id="type_", component_property="value")
-     ]
+    Input(component_id="y", component_property="value"),
+    Input(component_id="observations", component_property="value"),
+    Input(component_id="type_", component_property="value")
+    ]
 )
 def update_graph(x, y,observations,type_):
     time.sleep(5)
@@ -1195,9 +1203,9 @@ def update_graph(x, y,observations,type_):
         x_centers = (x_edges[:-1] + x_edges[1:]) / 2
         y_centers = (y_edges[:-1] + y_edges[1:]) / 2
         fig.add_trace(go.Contour(z=histogram,
-                                         x=x_centers,
-                                         y=y_centers,
-                                         contours_coloring='heatmap',name="contour_{x}_{y}"),row=1,col=1)
+                                        x=x_centers,
+                                        y=y_centers,
+                                        contours_coloring='heatmap',name="contour_{x}_{y}"),row=1,col=1)
         fig.add_trace(go.Histogram(x=new_df[x],name="histogram_{x}"), row=1, col=2)
         fig.add_trace(go.Histogram(y=new_df[y],name="histogram_{y}"), row=2, col=1)
         fig.update_layout()
@@ -1222,37 +1230,37 @@ q13_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=False,
-                 value="days_since_prior_order"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=False,
+                value="days_since_prior_order"
+                ),
     html.Br(),
     html.P(html.H5("Select y")),
     dcc.Dropdown(id="y",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=False,
-                 value="days_since_prior_order"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=False,
+                value="days_since_prior_order"
+                ),
     html.Br(),
     html.Br(),
     html.P(html.H5("Select z")),
     dcc.Dropdown(id="z",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=False,
-                 value="days_since_prior_order"
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=False,
+                value="days_since_prior_order"
+                ),
     html.Br(),
     html.Br(),
     html.B(html.H2("Enter number of observations")),
@@ -1269,11 +1277,11 @@ q13_layout = html.Div([
 
 @app.callback(
     Output(component_id="3Dplot", component_property="figure"),
-     [Input(component_id="x", component_property="value"),
-     Input(component_id="y", component_property="value"),
-     Input(component_id="z", component_property="value"),
-     Input(component_id="observations", component_property="value"),
-     ]
+    [Input(component_id="x", component_property="value"),
+    Input(component_id="y", component_property="value"),
+    Input(component_id="z", component_property="value"),
+    Input(component_id="observations", component_property="value"),
+    ]
 )
 def update_graph_3d(x, y, z,observations):
     time.sleep(5)
@@ -1305,7 +1313,7 @@ def update_graph_3d(x, y, z,observations):
         scene = dict(
         xaxis_title=f'{x}',
         yaxis_title=f'{y}',
-        zaxis_title=f{z}
+        zaxis_title=f"{z}",
         ),
         font_family = label_font_family,
         font_color = label_font_color,
@@ -1320,14 +1328,14 @@ q14_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                 ],
-                 multi=True,
-                 value=["order_dow","order_hour_of_day","days_since_prior_order"],
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"}
+                ],
+                multi=True,
+                value=["order_dow","order_hour_of_day","days_since_prior_order"],
+                ),
     html.Br(),
     html.Br(),
     html.B(html.H2("Enter number of observations")),
@@ -1388,15 +1396,15 @@ q15_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                     {"label": "order_number", "value": "order_number"}
-                 ],
-                 multi=True,
-                 value=["order_dow","order_hour_of_day","days_since_prior_order"],
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"},
+                    {"label": "order_number", "value": "order_number"}
+                ],
+                multi=True,
+                value=["order_dow","order_hour_of_day","days_since_prior_order"],
+                ),
     html.Br(),
     html.Br(),
     html.B(html.H2("Enter number of observations")),
@@ -1454,15 +1462,15 @@ q16_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                     {"label": "order_number", "value": "order_number"}
-                 ],
-                 multi=True,
-                 value=["order_dow","order_hour_of_day","days_since_prior_order"],
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"},
+                    {"label": "order_number", "value": "order_number"}
+                ],
+                multi=True,
+                value=["order_dow","order_hour_of_day","days_since_prior_order"],
+                ),
     html.Br(),
     html.Br(),
     html.B(html.H2("Enter number of observations")),
@@ -1523,14 +1531,14 @@ q17_layout = html.Div([
     html.Br(),
     html.P(html.H5("Select x")),
     dcc.Dropdown(id="x",
-                 options=[
-                     {"label": "order_dow", "value": "order_dow"},
-                     {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                     {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                 ],
-                 multi=True,
-                 value=["order_dow","order_hour_of_day","days_since_prior_order"],
-                 ),
+                options=[
+                    {"label": "order_dow", "value": "order_dow"},
+                    {"label": "order_hour_of_day", "value": "order_hour_of_day"},
+                    {"label": "days_since_prior_order", "value": "days_since_prior_order"},
+                ],
+                multi=True,
+                value=["order_dow","order_hour_of_day","days_since_prior_order"],
+                ),
     html.Br(),
     html.Br(),
     html.B(html.H2("Enter number of observations")),
@@ -1653,6 +1661,7 @@ def update_layout(value):
     else:
         return
 
-
 if __name__ == "__main__":
     app.run_server(debug=True, host='0.0.0.0', port=8020)
+
+
