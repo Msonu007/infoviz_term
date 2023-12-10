@@ -1,3 +1,5 @@
+import os.path
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
@@ -28,17 +30,186 @@ from scipy.spatial.distance import pdist, squareform
 from scipy.cluster.hierarchy import linkage, dendrogram
 
 from plotly.subplots import make_subplots
+
 title_font_size = 20
 title_font_family = "serif"
 title_font_color = "blue"
 label_font_size = 15
 label_font_color = "darkred"
-label_font_family="serif"
+label_font_family = "serif"
+
+import prettytable
+from matplotlib import pyplot as plt
+from prettytable import PrettyTable
+import pandas as pd
+import copy
+import numpy as np
+import sklearn
+from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier
+import seaborn as sns
 
 
+class Pretty:
+    def gen_table(self, df_1, title=None):
+        x = PrettyTable()
+        x.field_names = list(df_1.columns)
+        df_1 = df_1.round(2)
+        for i in range(len(df_1)):
+            x.add_row(df_1.iloc[i])
+        if title is not None:
+            print(x.get_string(title=title))
+        else:
+            print(x)
+            print("\n")
+        return x
+
+
+class Preprocessing(Pretty):
+    def __init__(self) -> None:
+        super().__init__()
+        self.dataset = None
+        self.label_prop = {"font": "serif", "color": "darkred", "size": 15}
+        self.title_prop = {"font": "serif", "color": "blue", "size": 20}
+
+    def load_dataset(self):
+        df1 = pd.read_csv("data/aisles.csv")
+        df2 = pd.read_csv("data/departments.csv")
+        df3 = pd.read_csv("data/order_products__prior.csv")
+        df4 = pd.read_csv("data/order_products__train.csv")
+        df5 = pd.read_csv("data/orders.csv")
+        df6 = pd.read_csv("data/products.csv")
+        self.gen_table(df1.head(), "Aisles")
+        print("\n")
+        self.gen_table(df2.head(), "Departments")
+        print("\n")
+        self.gen_table(df3.head(), "Order Products Prior")
+        print("\n")
+        self.gen_table(df4.head(), "Order Products Train")
+        print("\n")
+        self.gen_table(df5.head(), "Orders")
+        print("\n")
+        self.gen_table(df6.head(), "Products")
+        nan_rows = df5[df5.isnull().any(axis=1)]
+        calls = df5.loc[nan_rows.index]
+        self.gen_table(calls.head(), "Dataset before cleaning")
+        df5 = df5.fillna(0)
+        self.gen_table(df5.loc[nan_rows.index].head(), "Dataset after cleaning")
+        if not os.path.exists("train_final.csv"):
+            df_train_prior = pd.concat([df3, df4], axis=0).sort_values(by="order_id")
+            df_train_prior = pd.merge(left=df_train_prior, right=df6,
+                                      left_on='product_id', right_on='product_id').sort_values(by=['order_id']).reset_index(
+                drop=True)
+            df_train_prior = pd.merge(left=df_train_prior, right=df1,
+                                      left_on='aisle_id', right_on='aisle_id').sort_values(by=['order_id']).reset_index(
+                drop=True)
+            df_train_prior = pd.merge(left=df_train_prior, right=df2,
+                                      left_on='department_id', right_on='department_id').sort_values(
+                by=['order_id']).reset_index(drop=True)
+            df_train_prior = pd.merge(left=df_train_prior, right=df5,
+                                      left_on='order_id', right_on='order_id').sort_values(by=['order_id']).reset_index(
+                drop=True)
+
+            print(df_train_prior.dtypes, "Data Types")
+            col_order = ['user_id', 'order_id', 'product_id', 'aisle_id', 'department_id', 'add_to_cart_order',
+                         'reordered', 'product_name', 'aisle', 'department', 'eval_set', 'order_number', 'order_dow',
+                         'order_hour_of_day',
+                         'days_since_prior_order']
+            df_train_prior = df_train_prior[col_order]
+            self.gen_table(df_train_prior.head(), "Train Prior")
+            final_df = df_train_prior[df_train_prior["reordered"] == 0].sample(100000, random_state=5805)
+            final_df = pd.concat(
+                [final_df, df_train_prior[df_train_prior["reordered"] == 1].sample(100000, random_state=5805)])
+            final_df.to_csv("downsample.csv", index=False)
+            df_train_prior.to_csv("train_final.csv")
+            self.dataset = df_train_prior
+            self.gen_table(self.dataset.head(), "Downsampled Dataset")
+
+    def statstics(self):
+        print(self.dataset[["order_dow", "days_since_prior_order", "order_hour_of_day", "add_to_cart_order",
+                            "order_number"]].describe())
+
+    def perform_pca(self):
+        pca = PCA()
+        self.dataset = pd.read_csv("downsample.csv")
+        self.X_train = self.dataset[
+            ["order_dow", "days_since_prior_order", "order_hour_of_day", "add_to_cart_order", "order_number"]]
+        X_train_pca = pca.fit_transform(self.X_train)
+        print(f"The condition number of the dataset before pca {np.linalg.cond(self.X_train)}")
+        pca_ = PCA(3)
+        print(f"The condition number of the dataset after pca {np.linalg.cond(pca_.fit_transform(self.X_train))}")
+        exp_V = pca.explained_variance_ratio_
+        print(exp_V)
+        sum_val = 0
+        index_ = None
+        sum_ = []
+        for i in range(len(exp_V)):
+            sum_val += exp_V[i]
+            sum_.append(sum_val)
+            if sum_val >= 0.9:
+                if index_ is None:
+                    index_ = i + 1
+        print("n_features are ", index_)
+        plt.plot(list(range(1, len(exp_V) + 1)), np.cumsum(exp_V), marker=".")
+        plt.yticks(np.linspace(0, 1, 11))
+        plt.plot([index_] * 10, np.linspace(0.1, 1, 10))
+        plt.plot(range(1, 26), [0.9] * 25)
+        plt.xticks(range(1, len(exp_V) + 1))
+        plt.xlabel("n_features", fontdict=self.label_prop)
+        plt.ylabel("cumulative explained variance", fontdict=self.label_prop)
+        plt.title("PCA", fontdict=self.title_prop)
+        plt.show()
+
+    def perform_rfc(self):
+        c = RandomForestClassifier(random_state=5805)
+        self.X_train = self.dataset[
+            ["order_dow", "days_since_prior_order", "order_hour_of_day", "add_to_cart_order", "order_number"]]
+        self.y_train = self.dataset["reordered"]
+        c.fit(self.X_train, self.y_train)
+        f_imp = list(c.feature_importances_)
+        final_f_imp = sorted([[list(self.X_train.columns)[i], f_imp[i]] for i in range(len(f_imp))], reverse=True,
+                             key=lambda x: x[1])
+        sum_val = 0
+        index_ = None
+        sum_ = []
+        for i in range(len(final_f_imp)):
+            sum_val += final_f_imp[i][1]
+            sum_.append(sum_val)
+            if sum_val >= 0.95:
+                if index_ is None:
+                    index_ = i
+        plt.plot(range(1, len(sum_) + 1), sum_, linewidth=1.5, marker='.')
+        plt.plot([index_ + 1] * 50, np.linspace(0.1, 1, 50), linewidth=0.5)
+        plt.plot(list(range(1, 27)), [0.95] * 26, linewidth=0.5)
+        plt.xticks(range(1, len(sum_) + 1))
+        plt.yticks(np.linspace(0, 1, 21))
+        plt.xlabel("Number of Features", fontdict=self.label_prop)
+        plt.ylabel("Feature importances", fontdict=self.label_prop)
+        plt.title("rfc_feature_extraction", fontdict=self.title_prop)
+        plt.show()
+        feature_importance = pd.DataFrame({
+            'Feature': list(self.X_train.columns),
+            'feature_importance': f_imp
+        }).sort_values(by='feature_importance', ascending=False)
+
+        plt.figure(figsize=(10, 6))
+        sns.barplot(x='feature_importance', y='Feature', data=feature_importance, palette='viridis')
+        plt.title('Feature Importance from Random Forest', fontdict=self.title_prop)
+        plt.xlabel('Importance', fontdict=self.label_prop)
+        plt.ylabel('Feature', fontdict=self.label_prop)
+        plt.show()
+        self.rfr_imp = [final_f_imp[i][0] for i in range(index_ + 1)]
+        return self.rfr_imp
+
+    def box_plot(self):
+        fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+        sns.boxplot(data=self.X_train, ax=ax)
+        plt.show()
 class Phase1():
     def __init__(self, dataset, dataset_full):
         self.dataset = pd.read_csv(dataset)
+        self.c1 = Pretty()
+        self.c1.gen_table(self.dataset.head())
         print("downsample dataset loaded successfully")
         #self.dataset_full = pd.read_csv(dataset_full)
         #print("full sized dataset loaded sucessfully")
@@ -53,54 +224,67 @@ class Phase1():
         ax.set_xlabel("Day of the week", fontdict=self.label_prop)
         ax.set_ylabel("Number of orders placed", fontdict=self.label_prop)
         ax.set_title("Line plot n_orders vs dow", fontdict=self.title_prop)
-        fig.show()
+        plt.show()
 
     def plot_bar(self):
         # target variable distribution
         fig, ax = plt.subplots(1, 1, figsize=(30, 10))
-        sns.countplot(data=self.dataset, x="department", ax=ax)
+        top_10_categories = self.dataset['department'].value_counts().index[:20]
+
+        df_top_10 = self.dataset[self.dataset['department'].isin(top_10_categories)]
+
+        sns.countplot(x='department', data=df_top_10, order=df_top_10['department'].value_counts().index)
         ax.set_xlabel("Department", fontdict=self.label_prop)
         ax.set_ylabel("Frequency", fontdict=self.label_prop)
-        ax.set_title("Target variable distribution", fontdict=self.title_prop)
+        ax.set_title("Top 20 departments bar plot", fontdict=self.title_prop)
         ax.grid()
-        fig.show()
+        plt.show()
 
     def plot_stacked_group_bar(self):
-        temp_1 = self.dataset[self.dataset["reordered"] == 0]["product_name"].value_counts().reset_index().sort_values(by="product_name",ascending=False).iloc[:20].set_index(["index"]).to_dict()
-        temp_2 = self.dataset[self.dataset["reordered"] == 1]["product_name"].value_counts().reset_index().sort_values(by="product_name",ascending=False).iloc[:20].set_index(["index"]).to_dict()
-        temp_1 = temp_1["product_name"]
-        temp_2 = temp_2["product_name"]
-        temp_final = pd.DataFrame.from_dict({"product_name": temp_1.keys(), "ordered": temp_1.values(), "reordered": temp_2.values()})
-        temp_final = temp_final.set_index(["product_name"])
+        def make_data(col):
+            temp_1 = self.dataset[self.dataset["reordered"] == 0][col].value_counts().reset_index().sort_values(
+                by=col, ascending=False).iloc[:20].set_index(["index"]).to_dict()
+            temp_2 = self.dataset[self.dataset["reordered"] == 1][col].value_counts().reset_index().sort_values(
+                by=col, ascending=False).iloc[:20].set_index(["index"]).to_dict()
+            temp_1 = temp_1[col]
+            temp_2 = temp_2[col]
+            temp_final = pd.DataFrame.from_dict(
+                {col: temp_1.keys(), "ordered": temp_1.values(), "reordered": temp_2.values()})
+            temp_final = temp_final.set_index([col])
+            return temp_final
+        temp_final = make_data("product_name")
         fig, ax = plt.subplots(1, 1, figsize=(15, 10))
         temp_final.plot(kind="bar", ax=ax)
         ax.set_xlabel("Product Name", fontdict=self.label_prop)
         ax.set_ylabel("Number of Orders", fontdict=self.label_prop)
         ax.set_title("Barplot Group for product name", fontdict=self.title_prop)
-        fig.show()
+        plt.show()
+        temp_final = make_data("order_dow")
         fig, ax = plt.subplots(1, 1, figsize=(15, 10))
         temp_final.plot(kind="bar", stacked=True, ax=ax)
         ax.set_xlabel("Order Day of The Week", fontdict=self.label_prop)
         ax.set_ylabel("Number of Orders", fontdict=self.label_prop)
         ax.set_title("Barplot with stacks for Order_dow", fontdict=self.title_prop)
-        fig.show()
+        plt.show()
 
     def count_plot(self):
         # number of aisles in the dataset
+        top_10_categories = self.dataset['aisle_id'].value_counts().index[:20]
+
+        df_top_10 = self.dataset[self.dataset['aisle_id'].isin(top_10_categories)]
         fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-        sns.countplot(self.dataset, x="aisle_id", width=0.8, hue="department", dodge=False,
-                      order=self.dataset["aisle_id"].value_counts().index, ax=ax)
-        ax.set_title("histogram of various aisle's", fontdict=self.title_prop)
+        sns.countplot(df_top_10, x="aisle_id", width=0.8, hue="department", dodge=False,
+                      order=df_top_10["aisle_id"].value_counts().index, ax=ax)
+        ax.set_title("Countplot of various aisle's", fontdict=self.title_prop)
         ax.set_xlabel("aisle", fontdict=self.label_prop)
         ax.set_ylabel("frequency", fontdict=self.label_prop)
         ax.grid()
-        fig.show()
-
+        plt.show()
 
     def plot_pie(self):
         # products sold in aisle reordered vs not reordered
         # fig,ax = plt.subplots(1,2)
-        temp_1 = self.df[self.df["reordered"] == 1]["aisle"].value_counts().reset_index()
+        temp_1 = self.dataset[self.dataset["reordered"] == 1]["aisle"].value_counts().reset_index()
         temp_1.columns = ["aisle", "count"]
         temp_1 = temp_1.sort_values(by="count", ascending=False)
         temp_1 = temp_1.set_index("aisle")
@@ -109,7 +293,7 @@ class Phase1():
         temp_k = list(temp_k["count"])
         # products sold in aisle reordered vs not reordered
         # fig,ax = plt.subplots(1,2)
-        temp_2 = self.df[self.df["reordered"] == 0]["aisle"].value_counts().reset_index()
+        temp_2 = self.dataset[self.dataset["reordered"] == 0]["aisle"].value_counts().reset_index()
         temp_2.columns = ["aisle", "count"]
         temp_2 = temp_2.sort_values(by="count", ascending=False)
         temp_2 = temp_2.set_index("aisle")
@@ -152,22 +336,28 @@ class Phase1():
         )
         ax[1].legend(loc="upper right")
         ax[1].set_title("not reordered items", fontdict=self.title_prop)
-        fig.show()
+        plt.show()
 
     def plot_distplot(self):
         fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-        sns.distplot(self.df["order_hour_of_day"], ax=ax)
+        sns.distplot(np.sqrt(self.dataset["order_hour_of_day"]), ax=ax)
         ax.set_title("distplot of order_hour_of_day", fontdict=self.title_prop)
         ax.set_xlabel("Order_hour_of_day", fontdict=self.label_prop)
         ax.set_ylabel("Density", fontdict=self.label_prop)
-        fig.show()
+        plt.show()
 
     def plot_pair_plot(self):
-        ax = sns.pairplot(data=self.dataset[["order_dow", "days_since_prior_order", "order_hour_of_day"]])
+        ax = sns.pairplot(
+            data=self.dataset[["order_dow", "days_since_prior_order", "order_hour_of_day"]].apply(np.sqrt))
         plt.show()
 
     def plot_heatmap_with_cbar(self):
-        pass
+        df_temp = self.dataset[["order_dow", "order_hour_of_day", "days_since_prior_order",
+                                "add_to_cart_order"]].applymap(np.sqrt)
+        fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+        sns.heatmap(np.round(df_temp.corr(), 2), annot=True, cmap="viridis", ax=ax)
+        ax.set_title("Heatmap with colorbar", fontdict=self.title_prop)
+        plt.show()
 
     def plot_histogram_with_kde(self):
         new_df = self.dataset_full["user_id"].value_counts().reset_index()
@@ -177,11 +367,11 @@ class Phase1():
         ax.set_ylabel("Frequency", fontdict=self.label_prop)
         ax.set_title("KDE of maximum cart size per order")
         ax.lines[0].set_color('r')
-        fig.show()
+        plt.show()
 
     def plot_qq_plot(self):
         fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-        sm.qqplot(self.dataset["days_since_prior_order"], line='45', ax=ax)
+        sm.qqplot(self.dataset["days_since_prior_order"].map(np.sqrt), line='45', ax=ax)
 
         # Add labels and title
         ax.set_title('QQ Plot', fontdict=self.title_prop)
@@ -189,7 +379,7 @@ class Phase1():
         ax.set_ylabel('Sample Quantiles', fontdict=self.label_prop)
 
         # Show the plot
-        fig.show()
+        plt.show()
 
     def plot_kde_alpha(self):
         new_df = self.dataset_full["user_id"].value_counts().reset_index()
@@ -197,14 +387,18 @@ class Phase1():
         sns.kdeplot(data=new_df, x="user_id", ax=ax, fill=True, alpha=0.6)
         ax.set_xlabel("Cart Size", fontdict=self.label_prop)
         ax.set_ylabel("Frequency", fontdict=self.label_prop)
-        ax.set_title("KDE of maximum cart size")
-        fig.show()
+        ax.set_title("KDE of maximum cart size",fontdict=self.title_prop)
+        plt.show()
 
     def plot_reg_plot(self):
         fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-        sns.scatterplot(data=self.dataset, x="order_dow", y="order_hour_of_day", ax=ax)
-        sns.regplot(data=self.dataset, x="order_dow", y="order_hour_of_day", line_kws={"color": 'r'}, ax=ax)
-        fig.show()
+        df = self.dataset[["order_dow", "order_hour_of_day"]].applymap(np.sqrt)
+        sns.scatterplot(data=df, x="order_dow", y="order_hour_of_day", ax=ax)
+        sns.regplot(data=df, x="order_dow", y="order_hour_of_day", line_kws={"color": 'r'}, ax=ax)
+        ax.set_xlabel("order_dowe", fontdict=self.label_prop)
+        ax.set_ylabel("Order Hour of the Day", fontdict=self.label_prop)
+        ax.set_title("Reg plot for Order_dow and Order_hour_of_day")
+        plt.show()
 
     def plot_box(self):
         pass
@@ -216,14 +410,14 @@ class Phase1():
         print(df.head())
 
         # Create a line plot
-        sns.lineplot(data=df, x='order_dow', y='count',label="count")
+        sns.lineplot(data=df, x='order_dow', y='count', label="count")
 
         # Get the current Axes instance
         ax = plt.gca()
         for i in range(len(df)):
-            ax.plot([df["order_dow"]]*1000,np.linspace(0,df["count"],1000),color="red",alpha=0.4,linestyle="--")
+            ax.plot([df["order_dow"]] * 1000, np.linspace(0, df["count"], 1000), color="red", alpha=0.4, linestyle="--")
         # Fill the area under the line
-        ax.fill_between(df['order_dow'], df['count'], color='skyblue', alpha=0.4,label="area")
+        ax.fill_between(df['order_dow'], df['count'], color='skyblue', alpha=0.4, label="area")
         ax.set_xlabel("order_dow", fontdict=self.label_prop)
         ax.set_ylabel("count", fontdict=self.label_prop)
         ax.set_title("Area plot", fontdict=self.title_prop)
@@ -233,46 +427,52 @@ class Phase1():
         plt.show()
 
     def plot_violin(self):
-        fig,ax = plt.subplots(1,1,figsize=(10,10))
-        sns.violinplot(data=self.dataset[["days_since_prior_order", "order_dow", "order_hour_of_day"]],ax=ax)
+        fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+        sns.violinplot(data=self.dataset[["days_since_prior_order", "order_dow", "order_hour_of_day"]], ax=ax)
         ax.set_xlabel("numeric variables in the dataset")
-        ax.set_title("Violin plot",fontdict=self.title_prop)
-        fig.show()
+        ax.set_title("Violin plot", fontdict=self.title_prop)
+        plt.show()
 
     def plot_joint_kde(self):
-        df_temp = self.dataset[["order_dow", "order_hour_of_day"]]
+        df_temp = self.dataset[["order_dow", "order_hour_of_day"]].applymap(np.sqrt)
         ax = sns.jointplot(data=df_temp, x="order_dow", y="order_hour_of_day", kind="kde")
         ax.ax_joint.set_xlabel("order_dow", fontdict=self.label_prop)
-        ax.ax_jointset_ylabel("order_hour_of_day", fontdict=self.label_prop)
-        ax.ax_jointset_title("plot_joint_kde", fontdict=self.title_prop)
+        ax.ax_joint.set_ylabel("order_hour_of_day", fontdict=self.label_prop)
+        ax.ax_joint.set_title("plot_joint_kde", fontdict=self.title_prop)
+        plt.show()
 
     def plot_joint_scatter(self):
-        df_temp = self.dataset[["order_dow", "order_hour_of_day"]]
+        df_temp = self.dataset[["order_dow", "order_hour_of_day"]].applymap(np.sqrt)
         ax = sns.jointplot(data=df_temp, x="order_dow", y="order_hour_of_day", kind="scatter")
         ax.ax_joint.set_xlabel("order_dow", fontdict=self.label_prop)
-        ax.ax_jointset_ylabel("order_hour_of_day", fontdict=self.label_prop)
-        ax.ax_jointset_title("plot_joint_kde", fontdict=self.title_prop)
+        ax.ax_joint.set_ylabel("order_hour_of_day", fontdict=self.label_prop)
+        ax.ax_joint.set_title("plot_joint_kde", fontdict=self.title_prop)
+        plt.show()
 
     def plot_rug_plot(self):
         new_df = self.dataset_full["user_id"].value_counts().reset_index()
         sns.rugplot(x='user_id', data=new_df)
         sns.histplot(data=new_df, x="user_id", kde=True, fill=False)
+        plt.xlabel("user_id",fontdict=self.label_prop)
+        plt.ylabel("Count",fontdict=self.label_prop)
+        plt.title("Rug plot",fontdict=self.title_prop)
         plt.show()
 
     def threeD(self):
-        df_temp = self.dataset[["order_dow", "order_hour_of_day", "days_since_prior_order"]]
+        df_temp = self.dataset[["order_dow", "order_hour_of_day", "days_since_prior_order"]].applymap(np.sqrt)
         # Create grid and multivariate normal
         x = np.linspace(min(df_temp["order_dow"]), max(df_temp["order_dow"]), 500)
         y = np.linspace(min(df_temp["order_hour_of_day"]), max(df_temp["order_hour_of_day"]), 500)
-        X, Y = np.meshgrid(x,y)
+        X, Y = np.meshgrid(x, y)
         pos = np.empty(X.shape + (2,))
-        pos[:, :, 0] = X; pos[:, :, 1] = Y
+        pos[:, :, 0] = X;
+        pos[:, :, 1] = Y
         rv = multivariate_normal([df_temp["order_dow"].mean(), df_temp["order_hour_of_day"].mean()], [[1, 0], [0, 1]])
 
         # Make a 3D plot
         fig = plt.figure()
-        ax = fig.gca(projection='3d')
-        ax.plot_surface(X, Y, rv.pdf(pos),cmap='viridis',linewidth=0)
+        ax = fig.add_subplot(111, projection='3d')
+        ax.plot_surface(X, Y, rv.pdf(pos), cmap='viridis', linewidth=0)
         ax.set_xlabel('order_dow')
         ax.set_ylabel('order_hour_of_day')
         ax.set_zlabel('PDF')
@@ -280,25 +480,28 @@ class Phase1():
         plt.show()
 
     def plot_contour(self):
+        df_temp = self.dataset[["order_dow", "order_hour_of_day", "days_since_prior_order"]].applymap(np.sqrt)
         plt.figure(figsize=(10, 10))
-        sns.kdeplot(data=self.dataset, x="order_dow", y="order_hour_of_day", fill=True, alpha=0.6,cmap="viridis")
+        sns.kdeplot(data=self.dataset, x="order_dow", y="order_hour_of_day", fill=True, alpha=0.6, cmap="viridis")
         plt.xlabel("order_dow", fontdict=self.label_prop)
         plt.ylabel("order_hour_of_day", fontdict=self.label_prop)
         plt.title("Contour plot", fontdict=self.title_prop)
         plt.show()
+
     def plot_cluster_map(self):
-        df_temp = self.dataset[["order_dow", "order_hour_of_day", "days_since_prior_order"]]
+        df_temp = self.dataset[["order_dow", "order_hour_of_day", "days_since_prior_order"]].applymap(np.sqrt)
 
         # Create a cluster map
-        cluster_map = sns.clustermap(df_temp.corr(), annot=True, cmap='viridis')
-
+        cluster_map = sns.clustermap(np.round(df_temp.corr(),2), annot=True, cmap='viridis')
+        plt.suptitle('ClusterGrid ', fontdict=self.title_prop)
         # Show the plot
         plt.show()
 
     def plot_hexbin(self):
         df_temp = self.dataset[["order_dow", "days_since_prior_order"]]
         grid_ = sns.jointplot(data=df_temp, x="order_dow", y="days_since_prior_order", kind="hex")
-        grid_.ax_joint.set_title("Hexbin Plot",fontdict=self.title_prop)
+        grid_.ax_joint.set_title("Hexbin Plot", fontdict=self.title_prop)
+        plt.show()
 
     def plot_strip(self):
         synthetic_data = self.dataset["order_id"].value_counts().reset_index()
@@ -310,1644 +513,133 @@ class Phase1():
         temp_["order_dow"] = order_dow
         ax = sns.stripplot(data=temp_, x="order_dow", y="order_id")
         ax.set_yticks([1, 2, 3, 4])
+        ax.set_xlabel("Order_dow",fontdict=self.label_prop)
+        ax.set_ylabel("User id",fontdict=self.label_prop)
+        ax.set_title("Strip plot")
+        plt.show()
+
+    def plot_subplots(self):
+        fig,ax = plt.subplots(2,2,figsize=(10,10))
+        top_10_categories = self.dataset['aisle_id'].value_counts().index[:20]
+
+        df_top_10 = self.dataset[self.dataset['aisle_id'].isin(top_10_categories)]
+        sns.countplot(df_top_10, x="aisle_id", width=0.8, hue="department", dodge=False,
+                      order=df_top_10["aisle_id"].value_counts().index, ax=ax[0][0])
+        ax[0][0].set_title("Countplot of top 20 aisle's", fontdict=self.title_prop)
+        ax[0][0].set_xlabel("aisle", fontdict=self.label_prop)
+        ax[0][0].set_ylabel("frequency", fontdict=self.label_prop)
+        last_10_categories = self.dataset['aisle_id'].value_counts().index[-20:-1]
+
+        df_last_10 = self.dataset[self.dataset['aisle_id'].isin(last_10_categories)]
+        sns.countplot(df_last_10, x="aisle_id", width=0.8, hue="department", dodge=False,
+                      order=df_last_10["aisle_id"].value_counts().index, ax=ax[0][1])
+        ax[0][1].set_title("Countplot of least 20 aisle's", fontdict=self.title_prop)
+        ax[0][1].set_xlabel("aisle", fontdict=self.label_prop)
+        ax[0][1].set_ylabel("frequency", fontdict=self.label_prop)
+        ax[0][1].grid()
+        top_10_categories = self.dataset['user_id'].value_counts().index[:20]
+
+        df_top_10 = self.dataset[self.dataset['user_id'].isin(top_10_categories)]
+        sns.countplot(df_top_10, x="user_id", width=0.8, hue="department", dodge=False,
+                      order=df_top_10["user_id"].value_counts().index, ax=ax[1][0])
+        ax[1][0].set_title("Countplot of top 20 users's", fontdict=self.title_prop)
+        ax[1][0].set_xlabel("users", fontdict=self.label_prop)
+        ax[1][0].set_ylabel("frequency", fontdict=self.label_prop)
+        last_10_categories = self.dataset['user_id'].value_counts().index[-20:-1]
+
+        df_last_10 = self.dataset[self.dataset['user_id'].isin(last_10_categories)]
+        sns.countplot(df_last_10, x="user_id", width=0.8, hue="department", dodge=False,
+                      order=df_last_10["user_id"].value_counts().index, ax=ax[1][1])
+        ax[1][1].set_title("Countplot of least 20 user's", fontdict=self.title_prop)
+        ax[1][1].set_xlabel("users", fontdict=self.label_prop)
+        ax[1][1].set_ylabel("frequency", fontdict=self.label_prop)
+        ax[1][1].grid()
+        plt.show()
+
+        fig,ax = plt.subplots(2,2,figsize=(10,10))
+        sns.distplot(np.sqrt(self.dataset[self.dataset["reordered"] == 0]["order_hour_of_day"]), ax=ax[0][0])
+        ax[0][0].set_title("distplot of order_hour_of_day that are not reordered", fontdict=self.title_prop)
+        ax[0][0].set_xlabel("Order_hour_of_day", fontdict=self.label_prop)
+        ax[0][0].set_ylabel("Density", fontdict=self.label_prop)
+        sns.distplot(np.sqrt(self.dataset[self.dataset["reordered"] == 1]["order_hour_of_day"]), ax=ax[0][1])
+        ax[0][1].set_title("distplot of order_hour_of_day that are reordered", fontdict=self.title_prop)
+        ax[0][1].set_xlabel("Order_hour_of_day", fontdict=self.label_prop)
+        ax[0][1].set_ylabel("Density", fontdict=self.label_prop)
+        sns.distplot(np.sqrt(self.dataset[self.dataset["reordered"] == 0]["order_dow"]), ax=ax[1][0])
+        ax[1][0].set_title("distplot of order_dow that are not reordered", fontdict=self.title_prop)
+        ax[1][0].set_xlabel("Order_day_of_week", fontdict=self.label_prop)
+        ax[1][0].set_ylabel("Density", fontdict=self.label_prop)
+        sns.distplot(np.sqrt(self.dataset[self.dataset["reordered"] == 1]["order_dow"]), ax=ax[1][1])
+        ax[0][1].set_title("distplot of order_dow that are reordered", fontdict=self.title_prop)
+        ax[0][1].set_xlabel("Order_dow", fontdict=self.label_prop)
+        ax[0][1].set_ylabel("Density", fontdict=self.label_prop)
+        plt.show()
+        fig,ax = plt.subplots(1,2,figsize=(10,10))
+        df = self.dataset["order_dow"].value_counts().reset_index()
+        df.columns = ["order_dow", "count"]
+        df = df.sort_values(by="order_dow")
+        # Create a line plot
+        sns.lineplot(data=df, x='order_dow', y='count', label="count",ax=ax[0])
+        # Get the current Axes instance
+        for i in range(len(df)):
+            ax[0].plot([df["order_dow"]] * 1000, np.linspace(0, df["count"], 1000), color="red", alpha=0.4, linestyle="--")
+        # Fill the area under the line
+        ax[0].fill_between(df["order_dow"], df['count'], color='skyblue', alpha=0.4, label="area")
+        ax[0].set_xlabel("order_dow", fontdict=self.label_prop)
+        ax[0].set_ylabel("count", fontdict=self.label_prop)
+        ax[0].set_title("Area plot", fontdict=self.title_prop)
+        ax[0].legend()
+        df = self.dataset["order_hour_of_day"].value_counts().reset_index()
+        df.columns = ["order_hour_of_day", "count"]
+        df = df.sort_values(by="order_hour_of_day")
+        # Create a line plot
+        sns.lineplot(data=df, x='order_hour_of_day', y='count', label="count", ax=ax[1])
+        # Get the current Axes instance
+        for i in range(len(df)):
+            ax[1].plot([df["order_hour_of_day"]] * 1000, np.linspace(0, df["count"], 1000), color="red", alpha=0.4,
+                       linestyle="--")
+        # Fill the area under the line
+        ax[1].fill_between(df["order_hour_of_day"], df['count'], color='skyblue', alpha=0.4, label="area")
+        ax[1].set_xlabel("order_hour_of_day", fontdict=self.label_prop)
+        ax[1].set_ylabel("count", fontdict=self.label_prop)
+        ax[1].set_title("Area plot", fontdict=self.title_prop)
+        ax[1].legend()
+        plt.show()
 
     def plot_swarm(self):
         pass
-    
-class Phase2():
-    def create_dashboard(self):
 
-        external_Style_sheets = ["https://codepen.io/chriddvp/pen/bWLwgP.css"]
-        df = pd.read_csv("downsample.csv")
-        app = dash.Dash("My app", external_stylesheets=external_Style_sheets)
-        server = app.server
-        app.layout = html.Div(
-            [
-                html.Center(html.H1("Term Project")),
-                dcc.Tabs(
-                    id="select-PAGE",
-                    children=[
-                        dcc.Tab(label="Univariate Analysis", value="u"),
-                        dcc.Tab(label="Multivariate Analysis", value="m"),
-                    ],
-                    value="u",
-                ),
-                html.Div(id="question_ans"),
-            ]
-        )
-
-        univariate_layout = html.Div([
-            html.Br(),
-            dcc.Dropdown(
-                id="univariate",
-                options=[
-                    {"label": "Line Plot", "value": "lineplot"},
-                    {"label": "Histogram", "value": "histplot"},
-                    {"label": "barplot", "value": "barplot"},
-                    {"label":"countplot","value":"countplot"},
-                    {"label":"Pie Chart","value":"Pie Chart"},
-                    {"label":"Dist plot","value":"Dist plot"},
-                    {"label":"QQ plot","value":"QQ plot"},
-                    {"label":"KDE plot","value":"KDE plot"},
-                    {"label":"Violin plot","value":"Violin plot"},
-                    {"label":"Box plot","value":"Box plot"},
-                    {"label":"Area plot","value":"Area plot"}
-                ],
-                value="lineplot"
-            ),
-            html.Div(id="univout")]
-        )
-
-        multivariate_layout = html.Div([
-            html.Br(),
-            dcc.Dropdown(
-                id="multivariate",
-                options=[
-                    {"label":"Pair plot","value":"Pair plot"},
-                    {"label":"Reg plot","value":"Reg plot"},
-                    {"label":"Joint plot","value":"Joint plot"},
-                    {"label":"3D plot","value":"3D plot"},
-                    {"label":"Clustermap","value":"Clustermap"},
-                    {"label":"Heatmap","value":"Heatmap"},
-                ],
-                value="Pair plot"
-            ),
-            html.Div(id="multiout")]
-        )
-
-        q1_layout = html.Div([
-            html.Center(html.H2("Line plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=False,
-                        value="order_dow"
-                        ),
-            html.Br(),
-            html.P(html.H5("Select y")),
-            dcc.Dropdown(id="y",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=False,
-                        value="order_dow"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select Marker Style")),
-            dcc.RadioItems(id="marker",
-                        options=[
-                            {"label": "dot marker", "value": "."},
-                            {"label": "circle marker", "value": "o"},
-                            {"label": "star marker", "value": "*"}
-                        ],
-                        value="."
-                        ),
-            html.Br(),
-            html.Br(),
-            dcc.RadioItems(id="type",
-                        options=[
-                            {"label": "unique", "value": "unqiue"},
-                            {"label": "aggregate", "value": "aggregate"},
-                        ],
-                        value="aggregate"
-                        ),
-            html.Br(),
-            html.Br(),
-            dcc.RangeSlider(id="observations",
-                            min=50000,
-                            max=200000,
-                            step=50000
-                            ),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="lineplot")),
-            )
-        ])
-
-
-        @app.callback(
-            Output(component_id="lineplot", component_property="figure"),
-            [Input(component_id="x", component_property="value"),
-            Input(component_id="y", component_property="value"),
-            Input(component_id="marker", component_property="value"),
-            Input(component_id="type", component_property="value"),
-            Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_line_dy(x, y, marker, agg, observations):
-            if x is None or y is None:
-                return
-            if observations is None:
-                temp_df = df
-            else:
-                temp_df = df.iloc[int(observations[0]):int(observations[1])]
-            l1 = list(temp_df[x].unique())
-            l2 = list(temp_df[y].unique())
-            new_df = pd.DataFrame.from_dict({x: sorted(l1[:min(len(l1), len(l2))]), y: sorted(l2[:min(len(l2), len(l1))])})
-            if agg == "aggregate":
-                fig = px.line(data_frame=new_df,
-                            x=x,
-                            y=y,
-                            markers=marker,
-                            title=f"Line plot for {x} and {y}")
-            else:
-                fig = px.line(data_frame=df.iloc[:observations],
-                            x=x,
-                            y=y,
-                            markers=marker,
-                            title=f"Line plot for {x} and {y}")
-            fig.update_layout(
-                title=f"Line plot for {x} and {y}",
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-            )
-            return fig
-
-
-        q2_layout = html.Div([
-            html.Center(html.H2("Histogram plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=False,
-                        value="order_dow"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select hue")),
-            dcc.RadioItems(id="color",
-                        options=[
-                            {"label": "yes", "value": "yes"},
-                            {"label": "no", "value": "no"},
-                        ],
-                        value="no"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select Binwidth")),
-            dcc.Slider(id="binwidth",
-                    min=0,
-                    max=50,
-                    step=5
-                    ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select Observations for plotting")),
-            dcc.RangeSlider(id="observations",
-                            min=0,
-                            max=200000,
-                            step=50000
-                            ),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="histplot")),
-            )
-        ])
-
-
-        @app.callback(
-            Output(component_id="histplot", component_property="figure"),
-            [
-                Input(component_id="x", component_property="value"),
-                Input(component_id="color", component_property="value"),
-                Input(component_id="binwidth", component_property="value"),
-                Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_histplot(x, color, binwidth, observations):
-            if observations is None:
-                temp_df = df
-            else:
-                temp_df = df.iloc[int(observations[0]):int(observations[1])]
-            if color == "yes":
-                col = "reordered"
-            else:
-                col = None
-            if binwidth is not None and int(binwidth) != 0:
-                nbins = math.ceil((temp_df[x].max() - temp_df[x].min()) / int(binwidth))
-                fig = px.histogram(data_frame=temp_df,
-                                x=x, nbins=nbins,
-                                color=col,
-                                opacity=0.7,
-                                color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'},
-                                histnorm='probability density')
-            else:
-                fig = px.histogram(data_frame=temp_df, x=x, color=col, opacity=0.7,
-                                color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'}, histnorm='probability density')
-            fig.update_layout(
-                title=f"Hist plot for {x}",
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=1,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-            )
-            return fig
-
-
-        q3_layout = html.Div([
-            html.Center(html.H2("Bar plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "product_name", "value": "product_name"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=False,
-                        value="product_name"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select y")),
-            dcc.Dropdown(id="y",
-                        options=[
-                            {"label": "reordered", "value": "reordered"},
-                        ],
-                        multi=False,
-                        value="reordered"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select type")),
-            dcc.RadioItems(id="plottype",
-                        options=[
-                            {"label": "stack", "value": "stack"},
-                            {"label": "group", "value": "group"},
-                            {"label": "relative", "value": "relative"},
-                        ],
-                        value="relative"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select opacity")),
-            dcc.Slider(id="barspace",
-                    min=0.1,
-                    max=1,
-                    step=0.1
-                    ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select Observations for plotting")),
-            dcc.RangeSlider(id="observations",
-                            min=0,
-                            max=200000,
-                            step=50000
-                            ),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="barplot")),
-            )
-        ])
-
-
-        @app.callback(
-            Output(component_id="barplot", component_property="figure"),
-            [
-                Input(component_id="x", component_property="value"),
-                Input(component_id="y", component_property="value"),
-                Input(component_id="plottype", component_property="value"),
-                Input(component_id="barspace", component_property="value"),
-                Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_barplot(x, y, plottype, barspace, observations):
-            time.sleep(2)
-            if observations is None:
-                temp_df = df
-            else:
-                temp_df = df.iloc[int(observations[0]):int(observations[1])]
-            temp_1 = temp_df[temp_df[y] == 0][x].value_counts().reset_index().sort_values(
-                by=x, ascending=False).iloc[:20].set_index(["index"]).to_dict()
-            temp_2 = temp_df[temp_df[y] == 1][x].value_counts().reset_index().sort_values(
-                by=x, ascending=False).iloc[:20].set_index(["index"]).to_dict()
-            temp_1 = temp_1[x]
-            temp_2 = temp_2[x]
-            temp_final = pd.DataFrame.from_dict(
-                {x: temp_1.keys(), "ordered": temp_1.values(), "reordered": temp_2.values()})
-            temp_final = temp_final.set_index([x])
-            if barspace:
-                barspace = int(barspace)
-            else:
-                barspace = None
-            if plottype is not None:
-                plottype = plottype
-            else:
-                plottype = 'relative'
-
-            fig = px.bar(data_frame=temp_final, barmode=plottype, opacity=barspace)
-            fig.update_layout(
-                title=f"Bar plot for {x}",
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=1,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-            )
-            return fig
-
-
-        q4_layout = html.Div([
-            html.Center(html.H2("Count plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                            {"label": "aisle", "value": "aisle"},
-                            {"label": "department", "value": "department"},
-                            {"label": "reordered", "value": "reordered"},
-                            {"label": "product_name", "value": "product_name"},
-                        ],
-                        multi=False,
-                        value="product_name"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select hue")),
-            dcc.RadioItems(id="color",
-                        options=[
-                            {"label": "yes", "value": "yes"},
-                            {"label": "no", "value": "no"},
-                        ],
-                        value="no"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select Observations for plotting")),
-            dcc.RangeSlider(id="observations",
-                            min=0,
-                            max=200000,
-                            step=50000
-                            ),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="countplot")),
-            )
-        ])
-
-
-        @app.callback(
-            Output(component_id="countplot", component_property="figure"),
-            [
-                Input(component_id="x", component_property="value"),
-                Input(component_id="color", component_property="value"),
-                Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_countplot(x, color, observations):
-            if observations is None:
-                temp_df = df
-            else:
-                temp_df = df.iloc[int(observations[0]):int(observations[1])]
-            if color == "yes":
-                col = "reordered"
-            else:
-                col = None
-
-            category_counts = temp_df[x].value_counts()
-
-            # Select the top 20 categories
-            top_categories = category_counts.head(20).index
-
-            # Filter the data for the top 20 categories
-            filtered_data = temp_df[temp_df[x].isin(top_categories)]
-
-            fig = px.histogram(data_frame=filtered_data, x=x, color=col, opacity=0.7,nbins=20,
-                            color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'})
-            fig.update_layout(
-                title=f"Count plot for {x}",
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-            )
-            return fig
-
-        q5_layout = html.Div([
-            html.Center(html.H2("Pie Chart")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "aisle", "value": "aisle"},
-                            {"label": "department", "value": "department"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=False,
-                        value="aisle"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select hue")),
-            dcc.RadioItems(id="color",
-                        options=[
-                            {"label": "yes", "value": "yes"},
-                            {"label": "no", "value": "no"},
-                        ],
-                        value="yes"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select n_components")),
-            dcc.Slider(id="components",
-                    min=10,
-                    max=50,
-                    step=5,
-                    value=10
-                    ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select Observations for plotting")),
-            dcc.RangeSlider(id="observations",
-                            min=0,
-                            max=200000,
-                            step=50000
-                            ),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="pieplot")),
-            )
-            ,
-        ])
-
-
-        @app.callback(
-            Output(component_id="pieplot", component_property="figure"),
-            [
-                Input(component_id="x", component_property="value"),
-                Input(component_id="color", component_property="value"),
-                Input(component_id="components", component_property="value"),
-                Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_piechart(x, color, components, observations):
-            if observations is None:
-                temp_df = df.sample(50000)
-            else:
-                temp_df = df.iloc[int(observations[0]):int(observations[1])]
-            if color == "yes":
-                temp_1 = temp_df[temp_df["reordered"] == 1][x].value_counts().reset_index()
-                temp_1.columns = [x, "count"]
-                temp_1 = temp_1.sort_values(by="count", ascending=False)
-                temp_1 = temp_1.set_index(x)
-                temp_k = temp_1.iloc[:int(components)].__deepcopy__()
-                temp_k["count"] = temp_k["count"] / temp_k["count"].sum()
-                temp_k = list(temp_k["count"])
-                # products sold in aisle reordered vs not reordered
-                # fig,ax = plt.subplots(1,2)
-                temp_2 = temp_df[temp_df["reordered"] == 0][x].value_counts().reset_index()
-                temp_2.columns = [x, "count"]
-                temp_2 = temp_2.sort_values(by="count", ascending=False)
-                temp_2 = temp_2.set_index(x)
-                temp_k2 = temp_2.iloc[:int(components)].__deepcopy__()
-                temp_k2["count"] = temp_k2["count"] / temp_k2["count"].sum()
-                temp_k2 = list(temp_k2["count"])
-                temp_1 = temp_1.sort_values(by="count", ascending=False).iloc[:int(components)]
-                temp_2 = temp_2.sort_values(by="count",ascending=False).iloc[:int(components)]
-                explode_1 = []
-                explode_2 = []
-                for i in range(len(temp_k)):
-                    if temp_k[i] < 0.02:
-                        explode_1.append(0.1)
-                    else:
-                        explode_1.append(0)
-                for i in range(len(temp_k2)):
-                    if temp_k2[i] < 0.02:
-                        explode_2.append(0.1)
-                    else:
-                        explode_2.append(0)
-                fig = make_subplots(1,2,specs=[[{'type':'domain'}, {'type':'domain'}]])
-                fig.add_trace( go.Pie(labels=temp_1.index,values=temp_1["count"],pull=explode_1,name="reordered"),row=1,col=1)
-                fig.add_trace(go.Pie(labels=temp_2.index,values=temp_2["count"],pull=explode_2,name="not reordered"),row=1,col=2)
-                fig.update_layout(
-                title=f"Pie chart for {x}",
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-                )
-
-            else:
-                temp_1 = temp_df[x].value_counts().reset_index()
-                temp_1.columns = [x, "count"]
-                temp_1 = temp_1.sort_values(by="count", ascending=False)
-                temp_1 = temp_1.set_index(x)
-                temp_k = temp_1.iloc[:int(components)].__deepcopy__()
-                temp_k["count"] = temp_k["count"] / temp_k["count"].sum()
-                temp_k = list(temp_k["count"])
-                temp_1 = temp_1.sort_values(by="count", ascending=False).iloc[:int(components)]
-                explode_1 = []
-                for i in range(len(temp_k)):
-                    if temp_k[i] < 0.02:
-                        explode_1.append(0.1)
-                    else:
-                        explode_1.append(0)
-                fig = go.Figure(data = [go.Pie(labels=temp_1.index,values=temp_1["count"],pull=explode_1)])
-                fig.update_layout(
-                title=f"Pie chart for {x}",
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-            )
-                
-            
-            
-            return fig
-
-        q6_layout = html.Div([
-            html.Center(html.H2("Dist plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                            {"label":"order_id","value":"order_id"},
-                            {"label":"aisle","value":"aisle"},
-                            {"label":"product_name","value":"product_name"}
-                        ],
-                        multi=False,
-                        value="order_dow"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select hue")),
-            dcc.RadioItems(id="color",
-                        options=[
-                            {"label": "yes", "value": "yes"},
-                            {"label": "no", "value": "no"},
-                        ],
-                        value="no"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select Binsize")),
-            dcc.Slider(id="binwidth",
-                    min=0.1,
-                    max=1,
-                    step=0.1
-                    ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select Observations for plotting")),
-            dcc.RangeSlider(id="observations",
-                            min=0,
-                            max=200000,
-                            step=50000
-                            ),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="distplot")),
-            )
-            ,
-        ])
-
-
-        @app.callback(
-            Output(component_id="distplot", component_property="figure"),
-            [
-                Input(component_id="x", component_property="value"),
-                Input(component_id="color", component_property="value"),
-                Input(component_id="binwidth", component_property="value"),
-                Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_distplot(x, color, binwidth, observations):
-            if observations is None:
-                temp_df = df.sample(50000)
-            else:
-                temp_df = df.iloc[int(observations[0]):int(observations[1])]
-            if color == "yes":
-                col = "reordered"
-            else:
-                col = None
-            if binwidth is not None and int(binwidth) != 0:
-                nbins = math.ceil((temp_df[x].max() - temp_df[x].min()) / int(binwidth))
-                fig = px.histogram(data_frame=temp_df,
-                                x=x, nbins=nbins,
-                                color=col,
-                                opacity=0.7,
-                                color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'},
-                                histnorm='probability density')
-            else:
-                fig = px.histogram(data_frame=temp_df, x=x, color=col, opacity=0.7,
-                                color_discrete_map={'borders': 'rgba(1, 1, 1, 1)'}, histnorm='probability density')
-            density = stats.gaussian_kde(temp_df[x])
-            xs = np.linspace(temp_df[x].min(),temp_df[x].max(),len(temp_df))
-            ys = density(xs)
-            fig.add_trace(px.line(x=xs,y=ys,labels=f"distribution_{x}").data[0])
-            fig.update_layout(
-                title = f"Distribution Plot for {x}",
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-                )
-            return fig
-
-        q7_layout = html.Div([
-            html.Center(html.H2("Pair plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Checklist(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        value=["order_dow","order_hour_of_day"]
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select hue")),
-            dcc.RadioItems(id="color",
-                        options=[
-                            {"label": "yes", "value": "yes"},
-                            {"label": "no", "value": "no"},
-                        ],
-                        value="no"
-                        ),
-            
-            html.P(html.H5("Select Observations for plotting")),
-            dcc.RangeSlider(id="observations",
-                            min=0,
-                            max=200000,
-                            step=50000
-                            ),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="pairplot")),
-            )
-        ])
-
-
-        @app.callback(
-            Output(component_id="pairplot", component_property="figure"),
-            [
-                Input(component_id="x", component_property="value"),
-                Input(component_id="color", component_property="value"),
-                Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_pairplot(x, color, observations):
-            time.sleep(5)
-            if observations is None:
-                temp_df = df[x].sample(50000)
-            else:
-                temp_df = df[x].iloc[int(observations[0]):int(observations[1])]
-            if color == "yes":
-                col = "reordered"
-            else:
-                col = None
-            fig = make_subplots(rows=len(x), cols=len(x))
-            color_dict = {1:"red",2:"blue"}
-            # Populate the subplots
-            for i, var1 in enumerate(temp_df.columns):
-                for j, var2 in enumerate(temp_df.columns):
-                    if col is not None:
-                        color = dict(color=[color_dict[cat] for cat in temp_df["reordered"]])
-                    else:
-                        color=None
-                    if i == j:  # Diagonal - histogram
-                        fig.add_trace(go.Histogram(x=temp_df[var1], nbinsx=20,name=f"histogram_{var1}"), row=i+1, col=j+1)
-                    else:       # Off-diagonal - scatter plot
-                        fig.add_trace(go.Scatter(x=temp_df[var1], y=temp_df[var2],marker=color, mode='markers',name=f"scatter_{var1}_{var2}"), row=i+1, col=j+1)
-
-            # Customize and show the plot
-            fig.update_layout(
-                title = f"Pairplot for {x}",
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-                )
-            return fig
-
-        q8_layout = html.Div([
-            html.Center(html.H2("QQ plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                        ],
-                        multi=False,
-                        value="order_dow"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select Observations for plotting")),
-            dcc.RangeSlider(id="observations",
-                            min=0,
-                            max=200000,
-                            step=50000
-                            ),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="qqplot")),
-            )
-        ])
-
-
-        @app.callback(
-            Output(component_id="qqplot", component_property="figure"),
-            [
-                Input(component_id="x", component_property="value"),
-                Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_qq(x, observations):
-            time.sleep(3)
-            if observations is None:
-                temp_df = df.sample(50000)
-            else:
-                temp_df = df.iloc[int(observations[0]):int(observations[1])]
-
-            data_sorted = np.sort(temp_df[x])
-            norm_quantiles = stats.norm.ppf((np.arange(len(temp_df)) + 0.5) / len(temp_df))
-
-            # Create a QQ plot
-            fig = go.Figure(go.Scatter(x=norm_quantiles, y=data_sorted, mode='markers',name=f"{x}"))
-
-            # Add a reference line
-            fig.add_trace(go.Scatter(x=[min(norm_quantiles), max(norm_quantiles)], 
-                                    y=[min(norm_quantiles), max(norm_quantiles)],
-                                    mode='lines',
-                                    name='Reference Line'))
-
-            # Customize and show the plot
-            fig.update_layout(
-                title = f"QQ plot for {x}",
-                xaxis_title='Theoretical Quantiles',
-                yaxis_title='Sample Quantiles',
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-                )
-            return fig
-
-        q9_layout = html.Div([
-            html.Center(html.H2("KDE plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                        ],
-                        multi=False,
-                        value="order_dow"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select Observations for plotting")),
-            dcc.RangeSlider(id="observations",
-                            min=0,
-                            max=200000,
-                            step=50000
-                            ),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="kdeplot")),
-            )
-        ])
-
-
-        @app.callback(
-            Output(component_id="kdeplot", component_property="figure"),
-            [
-                Input(component_id="x", component_property="value"),
-                Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_kde(x, observations):
-            time.sleep(3)
-            if observations is None:
-                temp_df = df
-            else:
-                temp_df = df.iloc[int(observations[0]):int(observations[1])]
-
-            data_sorted = np.sort(temp_df[x])
-            kde_val = stats.gaussian_kde(temp_df[x])
-            col_name = copy.deepcopy(x)
-            x = np.linspace(min(temp_df[x]),max(temp_df[x]),1000)
-            y = kde_val(x)
-
-            # Create a QQ plot
-            fig = go.Figure(go.Scatter(x=x, y=y,fill = "tozeroy"))
-
-            # Add a reference line
-
-            # Customize and show the plot
-            fig.update_layout(
-                title = f"KDE Plot for {col_name}",
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-                )
-            return fig
-
-        q10_layout = html.Div([
-            html.Center(html.H2("Violin plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=True,
-                        value="order_dow"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select opacity")),
-            dcc.Slider(id="opacity",
-                    min=0.1,
-                    max=1,
-                    step=0.1,
-                    ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select Observations for plotting")),
-            dcc.RangeSlider(id="observations",
-                            min=0,
-                            max=200000,
-                            step=50000
-                            ),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="violinplot")),
-            )
-            ,
-        ])
-
-
-        @app.callback(
-            Output(component_id="violinplot", component_property="figure"),
-            [
-                Input(component_id="x", component_property="value"),
-                Input(component_id="opacity", component_property="value"),
-                Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_violinplot(x, binwidth, observations):
-            if observations is None:
-                temp_df = df
-            else:
-                temp_df = df.iloc[int(observations[0]):int(observations[1])]
-            if isinstance(x,str):
-                fig_ = go.Figure(data=go.Violin(y=temp_df[x], box_visible=True, meanline_visible=True,opacity=binwidth))
-            else:
-                fig_ = make_subplots(rows=1, cols=len(x))
-                for idx in x:
-                    if binwidth is not None:
-                        fig = go.Figure(data=go.Violin(y=temp_df[idx], box_visible=True, meanline_visible=True,opacity=binwidth,name=idx))
-                    else:
-                        fig = go.Figure(data=go.Violin(y=temp_df[idx], box_visible=True, meanline_visible=True,name=idx))
-                    fig_.add_trace(fig.data[0],row=1,col=x.index(idx)+1)
-            fig_.update_layout(
-                title = f"Violin Plot for {x}",
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-                )
-            return fig_
-
-        q11_layout = html.Div([
-            html.Center(html.H2("Reg plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=False,
-                        value="days_since_prior_order"
-                        ),
-            html.Br(),
-            html.P(html.H5("Select y")),
-            dcc.Dropdown(id="y",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=False,
-                        value="days_since_prior_order"
-                        ),
-            html.Br(),
-            html.Br(),
-            dcc.RangeSlider(id="observations",
-                            min=50000,
-                            max=200000,
-                            step=50000
-                            ),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(html.Div(dcc.Graph(id="regrplot"))),
-            )
-            
-        ])
-
-
-        @app.callback(
-            Output(component_id="regrplot", component_property="figure"),
-            [Input(component_id="x", component_property="value"),
-            Input(component_id="y", component_property="value"),
-            Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_regr_line(x, y,observations):
-            if x is None and y is None:
-                return
-            if observations is None:
-                temp_df = df
-            else:
-                temp_df = df.iloc[int(observations[0]):int(observations[1])]
-            fig = px.scatter(temp_df, x=x, y=y,trendline="ols")
-            fig.update_layout(
-                title = f"Regression Line Plot for {x} and {y}",
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-                )
-            return fig
-
-        q12_layout = html.Div([
-            html.Center(html.H2("Joint plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=False,
-                        value="days_since_prior_order"
-                        ),
-            html.Br(),
-            html.P(html.H5("Select y")),
-            dcc.Dropdown(id="y",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=False,
-                        value="days_since_prior_order"
-                        ),
-            html.Br(),
-            html.Br(),
-            dcc.RadioItems(id="type_",
-                            options=[
-                                {"label": "scatter", "value": "scatter"},
-                                {"label": "kde", "value": "kde"}
-                            ],
-                            value="scatter"),
-            html.Br(),
-            html.Br(),
-            html.B(html.H2("Enter number of observations")),
-            dcc.Input(id="observations", type="number", placeholder=f"{len(df)}"),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="jointplot")),
-            )
-        ])
-
-
-        @app.callback(
-            Output(component_id="jointplot", component_property="figure"),
-            [Input(component_id="x", component_property="value"),
-            Input(component_id="y", component_property="value"),
-            Input(component_id="observations", component_property="value"),
-            Input(component_id="type_", component_property="value")
-            ]
-        )
-        def update_graph(x, y,observations,type_):
-            time.sleep(5)
-            if observations is None:
-                observations = 50000
-            else:
-                observations = observations
-            new_df = df[:int(observations)]
-            if type_ == "scatter":
-                fig = make_subplots(rows=2, cols=2, 
-                                    specs=[[{"type": "scatter"}, {"type": "histogram"}],
-                                        [{"type": "histogram"}, None]])
-
-                fig.add_trace(go.Scatter(x=new_df[x], y=new_df[y], mode='markers',name="scatter_{x}_{y}"), row=1, col=1)
-                fig.add_trace(go.Histogram(x=new_df[x],name="histogram_{x}"), row=1, col=2)
-                fig.add_trace(go.Histogram(y=new_df[y],name="histogram_{y}"), row=2, col=1)
-
-            else:
-                fig = make_subplots(rows=2, cols=2, 
-                                    specs=[[{"type": "scatter"}, {"type": "contour"}],
-                                        [{"type": "histogram"}, None]])
-                x_bins = np.linspace(new_df[x].min(), new_df[x].max(), 30)
-                y_bins = np.linspace(new_df[y].min(), new_df[y].max(), 30)
-                histogram,x_edges,y_edges = np.histogram2d(new_df[x], new_df[y], bins=[x_bins, y_bins],density=True)
-                x_centers = (x_edges[:-1] + x_edges[1:]) / 2
-                y_centers = (y_edges[:-1] + y_edges[1:]) / 2
-                fig.add_trace(go.Contour(z=histogram,
-                                                x=x_centers,
-                                                y=y_centers,
-                                                contours_coloring='heatmap',name="contour_{x}_{y}"),row=1,col=1)
-                fig.add_trace(go.Histogram(x=new_df[x],name="histogram_{x}"), row=1, col=2)
-                fig.add_trace(go.Histogram(y=new_df[y],name="histogram_{y}"), row=2, col=1)
-                fig.update_layout()
-            fig.update_layout(
-                title='Joint plot',
-                xaxis_title=x,
-                yaxis_title=y,
-                width=1600,
-                height=1600,
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                )
-            return fig
-        q13_layout = html.Div([
-            html.Center(html.H2("Joint plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=False,
-                        value="days_since_prior_order"
-                        ),
-            html.Br(),
-            html.P(html.H5("Select y")),
-            dcc.Dropdown(id="y",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=False,
-                        value="days_since_prior_order"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.P(html.H5("Select z")),
-            dcc.Dropdown(id="z",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=False,
-                        value="days_since_prior_order"
-                        ),
-            html.Br(),
-            html.Br(),
-            html.B(html.H2("Enter number of observations")),
-            dcc.Input(id="observations", type="number", placeholder=f"{len(df)}"),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="3Dplot")),
-            )
-        ])
-
-        @app.callback(
-            Output(component_id="3Dplot", component_property="figure"),
-            [Input(component_id="x", component_property="value"),
-            Input(component_id="y", component_property="value"),
-            Input(component_id="z", component_property="value"),
-            Input(component_id="observations", component_property="value"),
-            ]
-        )
-        def update_graph_3d(x, y, z,observations):
-            time.sleep(5)
-            if observations is None:
-                observations = len(df)
-            else:
-                observations = observations
-            new_df = df.iloc[:int(observations)]
-            fig = go.Figure(data=[go.Scatter3d(
-            x=new_df[x],
-            y=new_df[y],
-            z=df[z],
-            mode='markers',
-            marker=dict(
-                size=3,
-                color=new_df[z],  # set color to an array/list of desired values
-                colorscale='Viridis',   # choose a colorscale
-                opacity=0.8
-            ),name=f"3Dplot_{x}_{y}_{z}")])
-
-            # tight layout
-            fig.update_layout(
-                title = f"3D plot for {x} and {y} and {z}",
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                scene = dict(
-                xaxis_title=f'{x}',
-                yaxis_title=f'{y}',
-                zaxis_title=f"{z}",
-                ),
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-                margin=dict(l=0, r=0, b=0, t=0)
-                )
-            return fig
-
-        q14_layout = html.Div([
-            html.Center(html.H2("Clustermap")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"}
-                        ],
-                        multi=True,
-                        value=["order_dow","order_hour_of_day","days_since_prior_order"],
-                        ),
-            html.Br(),
-            html.Br(),
-            html.B(html.H2("Enter number of observations")),
-            dcc.Input(id="observations", type="number", placeholder=f"{100}"),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="clustermap")),
-            )
-            
-        ])
-
-
-        @app.callback(
-            Output(component_id="clustermap", component_property="figure"),
-            [
-                Input(component_id="x", component_property="value"),
-                Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_clustermap(x, observations):
-            if observations is None:
-                temp_df = df.sample(100)
-            else:
-                temp_df = df.sample(int(observations))
-            df_temp = temp_df[x]
-
-            # Calculate the distance between each sample
-            dists = pdist(df_temp.values)
-            print(dists)
-
-            # Perform hierarchical/agglomerative clustering
-            linkage_matrix = linkage(dists, method='centroid')
-
-            # Create a dendrogram
-            dendro = ff.create_dendrogram(linkage_matrix, orientation='left')
-
-            # Update layout
-            dendro['layout'].update({'width':800, 'height':600})
-            dendro.update_layout(
-                title = f"Cluster plot for {x}",
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                height=1000,
-                )
-            return dendro
-
-        q15_layout = html.Div([
-            html.Center(html.H2("Box plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                            {"label": "order_number", "value": "order_number"}
-                        ],
-                        multi=True,
-                        value=["order_dow","order_hour_of_day","days_since_prior_order"],
-                        ),
-            html.Br(),
-            html.Br(),
-            html.B(html.H2("Enter number of observations")),
-            dcc.Input(id="observations", type="number", placeholder=f"{len(df)}"),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="boxplot"))
-            )
-        ])
-
-
-        @app.callback(
-            Output(component_id="boxplot", component_property="figure"),
-            [
-                Input(component_id="x", component_property="value"),
-                Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_boxplot(x, observations):
-            if observations is None:
-                temp_df = df
-            else:
-                temp_df = df.iloc[:int(observations)]
-            df_temp = temp_df[x]
-
-            # Create a box plot
-            fig = go.Figure()
-            for col in x:
-                fig.add_trace(go.Box(y=temp_df[col], name=col))
-
-            # Update layout
-
-            fig.update_layout(
-                title = f"Box plot for {x}",
-                autosize=False,
-                width=1500, 
-                height=500,
-                margin=dict(l=65, r=50, b=65, t=90),
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                )
-            return fig
-
-        q16_layout = html.Div([
-            html.Center(html.H2("Heatmap plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                            {"label": "order_number", "value": "order_number"}
-                        ],
-                        multi=True,
-                        value=["order_dow","order_hour_of_day","days_since_prior_order"],
-                        ),
-            html.Br(),
-            html.Br(),
-            html.B(html.H2("Enter number of observations")),
-            dcc.Input(id="observations", type="number", placeholder=f"{len(df)}"),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="heatmap"))
-            )
-        ])
-
-
-        @app.callback(
-            Output(component_id="heatmap", component_property="figure"),
-            [
-                Input(component_id="x", component_property="value"),
-                Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_heatmap(x, observations):
-            if observations is None:
-                temp_df = df.sample(50000)
-            else:
-                temp_df = df.iloc[:int(observations)]
-            df_temp = temp_df[x]
-            df_corr = df_temp.corr()
-            # Create a box plot
-            fig = px.imshow(df_corr,labels=dict(color="Correlation Coefficients"),x=df_corr.columns,y=df_corr.columns,zmin=-0.5,zmax=0.6,color_continuous_scale="RdBu_r")
-            annot = []
-            for i,row_ in enumerate(df_corr.values):
-                for j,val in enumerate(row_):
-                    annot.append(dict(x=df_corr.columns[j],y=df_corr.columns[i],text=np.round(val,2),showarrow=False))
-
-            # Update layout
-
-            fig.update_layout(
-                title = f"Correlation Heatmap plot",
-                autosize=False,
-                margin=dict(l=65, r=50, b=65, t=90),
-                width=1500, 
-                height=500,
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                annotations=annot,
-                )
-            return fig
-
-        q17_layout = html.Div([
-            html.Center(html.H2("Area plot")),
-            html.Br(),
-            html.P(html.H5("Select x")),
-            dcc.Dropdown(id="x",
-                        options=[
-                            {"label": "order_dow", "value": "order_dow"},
-                            {"label": "order_hour_of_day", "value": "order_hour_of_day"},
-                            {"label": "days_since_prior_order", "value": "days_since_prior_order"},
-                        ],
-                        multi=True,
-                        value=["order_dow","order_hour_of_day","days_since_prior_order"],
-                        ),
-            html.Br(),
-            html.Br(),
-            html.B(html.H2("Enter number of observations")),
-            dcc.Input(id="observations", type="number", placeholder=f"{len(df)}"),
-            html.Br(),
-            html.Br(),
-            dcc.Loading(
-                id="loading",
-                type="circle",
-                children=html.Div(dcc.Graph(id="areaplot"))
-            )
-        ])
-
-
-        @app.callback(
-            Output(component_id="areaplot", component_property="figure"),
-            [
-                Input(component_id="x", component_property="value"),
-                Input(component_id="observations", component_property="value")
-            ]
-        )
-        def plot_area(x, observations):
-            if observations is None:
-                temp_df = df.sample(50000)
-            else:
-                temp_df = df.iloc[:int(observations)]
-            
-            fig = go.Figure()
-
-            for var in x:
-                temp_1 = df[var].value_counts().reset_index()
-                temp_1.columns = [var, 'count']
-                temp_1 = temp_1.sort_values(var)
-                fig.add_trace(go.Scatter(
-                    x=temp_1[var], 
-                    y=temp_1['count'],
-                    fill='tozeroy',
-                    mode='lines', 
-                    name=var,
-                ))
-
-            fig.update_layout(
-                title="Area Plot",
-                xaxis_title="columns",
-                yaxis_title="Value",
-                autosize=False,
-                width=1500,
-                title_font_family=title_font_family,
-                title_font_color=title_font_color,
-                title_font_size=title_font_size,
-                title_x=0.5,
-                title_y=0.95,
-                font_family = label_font_family,
-                font_color = label_font_color,
-                font_size = label_font_size,
-                )
-
-            return fig
-
-        @app.callback(
-            Output(component_id="question_ans", component_property="children"),
-            [Input(component_id="select-PAGE", component_property="value")],
-        )
-        def select_function(value):
-            if value == "u":
-                return univariate_layout
-            elif value == "m":
-                return multivariate_layout
-            else:
-                return
-
-
-        @app.callback(
-            Output(component_id="univout", component_property="children"),
-            [Input(component_id="univariate", component_property="value")],
-        )
-        def update_layout(value):
-            if value == "lineplot":
-                return q1_layout
-            elif value == "histplot":
-                return q2_layout
-            elif value == "barplot":
-                return q3_layout
-            elif value == "countplot":
-                return q4_layout
-            elif value == "Pie Chart":
-                return q5_layout
-            elif value == "Dist plot":
-                return q6_layout
-            elif value == "QQ plot":
-                return q8_layout
-            elif value == "KDE plot":
-                return q9_layout
-            elif value == "Violin plot":
-                return q10_layout
-            elif value == "Box plot":
-                return q15_layout
-            elif value == "Area plot":
-                return q17_layout
-            else:
-                return
-            
-        @app.callback(
-            Output(component_id="multiout", component_property="children"),
-            [Input(component_id="multivariate", component_property="value")],
-        )
-        def update_layout(value):
-            if value == "Pair plot":
-                return q7_layout
-            elif value == "Reg plot":
-                return q11_layout
-            elif value == "Joint plot":
-                return q12_layout
-            elif value == "3D plot":
-                return q13_layout
-            elif value == "Clustermap":
-                return q14_layout
-            elif value == "Heatmap":
-                return q16_layout
-            else:
-                return
-
-        app.run_server(debug=True, host='0.0.0.0', port=8020)
-        
-if __name__ == "__main__":
-    c = Phase2()
-    c.create_dashboard()
+    def plot_all(self):
+        self.plot_line()
+        self.count_plot()
+        self.plot_area()
+        self.plot_bar()
+        self.plot_box()
+        self.plot_cluster_map()
+        self.plot_contour()
+        self.plot_distplot()
+        self.plot_heatmap_with_cbar()
+        self.plot_hexbin()
+        self.plot_histogram_with_kde()
+        self.plot_joint_kde()
+        self.plot_joint_scatter()
+        self.plot_kde_alpha()
+        self.plot_pair_plot()
+        self.plot_pie()
+        self.plot_qq_plot()
+        self.plot_reg_plot()
+        self.plot_rug_plot()
+        self.plot_stacked_group_bar()
+        self.plot_strip()
+        self.plot_violin()
+        self.plot_subplots()
+        self.plot_contour()
+        self.threeD()
+
+c1 = Preprocessing()
+c1.load_dataset()
+c1.perform_pca()
+c1.perform_rfc()
+c1.box_plot()
+c = Phase1("downsample.csv", "train_final.csv")
+c.plot_subplots()
